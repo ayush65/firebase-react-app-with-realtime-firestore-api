@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { collection, addDoc } from "@firebase/firestore";
-import { db } from "../../config/firebase";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { auth, database, db } from "../../config/firebase";
+import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
+import { onValue, ref, update } from "firebase/database";
+import { useNavigate } from "react-router-dom";
 
 const Question = () => {
   const [answers, setAnswers] = useState([]);
+  const [user, setUser] = useState();
+  const navigate = useNavigate();
 
   const handleButtonClick = (question, answer) => {
     const hasDesiredQuestion = answers.some(
@@ -31,7 +35,49 @@ const Question = () => {
     console.log(answers);
   };
 
+  const Exit = async () => {
+    try {
+      update(ref(database, `/logins/${user.uid}`), {
+        email: user.email,
+        status: "offline",
+        logout: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    const auth = getAuth();
+    onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        const uid = currentUser.uid;
+        setUser(currentUser);
+        update(ref(database, `/logins/${currentUser.uid}`), {
+          email: currentUser.email,
+          status: "online",
+          loginTime: new Date(),
+        });
+      } else {
+        navigate("/");
+      }
+    });
+  }, []);
+
+  window.onunload = () => {
+    update(ref(database, `/logins/${user.uid}`), {
+      status: "offline",
+      logout: new Date(),
+    });
+  };
 
   return (
     <div className="main-container">
@@ -85,6 +131,11 @@ const Question = () => {
         </div>
 
         <button onClick={finishQuestionnaire}>Finish</button>
+
+        <button onClick={logout}> Logout </button>
+        <div>
+          <button onClick={Exit}> Exit </button>
+        </div>
       </div>
     </div>
   );
